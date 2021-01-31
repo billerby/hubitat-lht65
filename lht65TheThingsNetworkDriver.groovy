@@ -1,3 +1,4 @@
+import java.text.SimpleDateFormat
 /**
  *  Current temperature and humidity
  *
@@ -110,6 +111,7 @@ def poll()  {
                 log.debug("data from temp DS: "+resp.data[0].TempC_DS)
                 log.debug("data from humidity SHT: "+resp.data[0].Hum_SHT)
                 log.debug("data from Battery (volt): "+resp.data[0].BatV)
+                log.debug("Timestamp when data was submitted: " + resp.data[0].time)
             }
 
             sendEvent([
@@ -127,11 +129,33 @@ def poll()  {
             ]);
 
             sendEvent([
+                    name: 'temperatureInternal',
+                    value: resp.data[0].TempC_SHT,
+                    unit: "C",
+                    descriptionText: "Temperature (internal sensor) is $resp.data[0].TempC_SHT C"
+            ]);
+
+            sendEvent([
                     name: 'battery',
                     value: resp.data[0].BatV,
                     unit: "V",
                     descriptionText: "Temperature level is $resp.data[0].BatV Volts"
             ]);
+            String time = resp.data[0].time;
+
+            // Truncate microseconds from the incoming time
+            int length = time.length()
+            int endIndex = length-7
+            time = time.substring(0, endIndex)
+            SimpleDateFormat sdfOriginal = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
+            SimpleDateFormat displayFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+
+            String utcDateTime = displayFormat.format(sdfOriginal.parse(time)) + " UTC";
+
+            sendEvent(
+                    name: 'lastCheckingTime',
+                    value: utcDateTime
+            );
 
         }
 
