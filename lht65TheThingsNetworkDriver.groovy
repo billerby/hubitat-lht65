@@ -44,7 +44,7 @@ metadata {
             name: "Current Temperature and Humidity",
             author: "Erik Billerby",
             namespace: "billerby",
-            importUrl: "<githuburl>"
+            importUrl: "https://raw.githubusercontent.com/billerby/hubitat-lht65/main/lht65TheThingsNetworkDriver.groovy"
     ) {
         capability "Sensor"
         capability "Polling"
@@ -144,5 +144,4 @@ def poll()  {
         log.error ("Could not retrieve temperature and humidity data:", e)
         sendEvent(name: "error", value: "Could not retrieve data from API", displayed: true)
     }
-
 }
