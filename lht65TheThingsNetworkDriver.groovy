@@ -37,6 +37,7 @@ import java.text.SimpleDateFormat
  *  Changes:
  *
  * v0.1.0 - 2021-01-31 - First version
+ * v0.1.1 - 2021-07-10 - Updated to use TTN version 3
  *
  */
 
@@ -56,6 +57,7 @@ metadata {
     }
 
     preferences {
+        input name: "ttnRegion", type: "text", title: "The ttn region to use (server)", required: false, defaultValue: 'eu1'
         input name: "appName", type: "text", title: "Name of TTN-application to poll", required: true, defaultValue: ''
         input name: "deviceId", type: "text", title: "Device id of the LHT65 to fetch data from", required: true, defaultValue: ''
         input name: "accessKey", type: "text", title: "TTN Access key for the App", required: true, defaultValue: ''
@@ -96,52 +98,62 @@ def poll()  {
     try {
 
         def params = [
-                uri: "https://${appName}.data.thethingsnetwork.org/api/v2/query/${deviceId}?last=30m",
-                headers: ['Accept': 'application/json', 'Authorization': " key ${accessKey}"],
+                uri: "https://${ttnRegion}.cloud.thethings.network/api/v3/as/applications/${appName}/devices/${deviceId}/packages/storage/uplink_message?limit=1&order=-received_at",
+                headers: ['Accept': 'text/event-stream', 'Authorization': " Bearer ${accessKey}"],
                 ignoreSSLIssues: true
         ]
 
         if(logEnable){
             log.debug "calling: ${params.uri} with HTTP GET"
         }
-
+        
         httpGet(params) {resp ->
+            // read from inputstream into a String
+            int n = resp.getData().available()
+            log.debug(n)
+            byte[] bytes = new byte[n]
+            resp.getData().read(bytes, 0, n)
+            String payload = new String(bytes)
+            def parser = new groovy.json.JsonSlurper()
+            def json = parser.parseText(payload)
+            log.debug(json)
+            
             if(logEnable){
-                log.debug("data from temp SHT: "+resp.data[0].TempC_SHT)
-                log.debug("data from temp DS: "+resp.data[0].TempC_DS)
-                log.debug("data from humidity SHT: "+resp.data[0].Hum_SHT)
-                log.debug("data from Battery (volt): "+resp.data[0].BatV)
-                log.debug("Timestamp when data was submitted: " + resp.data[0].time)
+                log.debug("data from temp SHT: " + json.result.uplink_message.decoded_payload.TempC_SHT)
+                log.debug("data from temp DS: " + json.result.uplink_message.decoded_payload.TempC_DS)
+                log.debug("data from humidity SHT: "+ json.result.uplink_message.decoded_payload.Hum_SHT)
+                log.debug("data from Battery (volt): " + json.result.uplink_message.decoded_payload.BatV)
+                log.debug("Timestamp when data was submitted: " + json.result.received_at)
             }
 
             sendEvent([
                     name: 'humidity',
-                    value: resp.data[0].Hum_SHT,
+                    value: json.result.uplink_message.decoded_payload.Hum_SHT,
                     unit: "%",
                     descriptionText: "Humidity is $resp.data[0].Hum_SHT%"
             ]);
 
             sendEvent([
                     name: 'temperature',
-                    value: resp.data[0].TempC_DS,
+                    value: json.result.uplink_message.decoded_payload.TempC_DS,
                     unit: "C",
                     descriptionText: "Temperature (external sensor) is $resp.data[0].TempC_DS C"
             ]);
 
             sendEvent([
                     name: 'temperatureInternal',
-                    value: resp.data[0].TempC_SHT,
+                    value: json.result.uplink_message.decoded_payload.TempC_SHT,
                     unit: "C",
                     descriptionText: "Temperature (internal sensor) is $resp.data[0].TempC_SHT C"
             ]);
 
             sendEvent([
                     name: 'battery',
-                    value: resp.data[0].BatV,
+                    value: json.result.uplink_message.decoded_payload.BatV,
                     unit: "V",
                     descriptionText: "Temperature level is $resp.data[0].BatV Volts"
             ]);
-            String time = resp.data[0].time;
+            String time = json.result.received_at;
 
             // Truncate microseconds from the incoming time
             int length = time.length()
